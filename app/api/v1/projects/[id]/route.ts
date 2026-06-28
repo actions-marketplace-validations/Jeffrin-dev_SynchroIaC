@@ -1,3 +1,4 @@
+import { ok, badRequest, notFound, serverError } from '../../../../../lib/api-response'
 import { requireAuth } from '../../../../../lib/auth'
 import { supabase } from '../../../../../lib/supabase'
 
@@ -78,7 +79,7 @@ export async function GET(req: Request, { params }: RouteContext) {
   const project = await fetchProjectForOrg(params.id, org.id)
 
   if (!project) {
-    return Response.json({ error: 'Project not found' }, { status: 404 })
+    return notFound('Project not found')
   }
 
   const { data: scans, error } = await supabase
@@ -89,10 +90,10 @@ export async function GET(req: Request, { params }: RouteContext) {
     .limit(5)
 
   if (error) {
-    return Response.json({ error: 'Failed to fetch recent scans' }, { status: 500 })
+    return serverError('Failed to fetch recent scans')
   }
 
-  return Response.json({ ...project, recent_scans: scans ?? [] })
+  return ok({ ...project, recent_scans: scans ?? [] })
 }
 
 export async function PATCH(req: Request, { params }: RouteContext) {
@@ -100,16 +101,16 @@ export async function PATCH(req: Request, { params }: RouteContext) {
   const project = await fetchProjectForOrg(params.id, org.id)
 
   if (!project) {
-    return Response.json({ error: 'Project not found' }, { status: 404 })
+    return notFound('Project not found')
   }
 
   const { body, error: bodyError } = await parseJsonBody(req)
   if (bodyError || !body) {
-    return Response.json({ error: bodyError }, { status: 400 })
+    return badRequest(bodyError ?? 'Invalid request body')
   }
 
   const validationError = validateProjectFields(body)
-  if (validationError) return Response.json({ error: validationError }, { status: 400 })
+  if (validationError) return badRequest(validationError)
 
   const update: Record<string, string> = {}
   if (body.name !== undefined) update.name = (body.name as string).trim()
@@ -118,7 +119,7 @@ export async function PATCH(req: Request, { params }: RouteContext) {
   if (body.aws_region !== undefined) update.aws_region = body.aws_region as string
 
   if (Object.keys(update).length === 0) {
-    return Response.json(project)
+    return ok(project)
   }
 
   const { data, error } = await supabase
@@ -130,10 +131,10 @@ export async function PATCH(req: Request, { params }: RouteContext) {
     .single()
 
   if (error) {
-    return Response.json({ error: 'Failed to update project' }, { status: 500 })
+    return serverError('Failed to update project')
   }
 
-  return Response.json(data)
+  return ok(data)
 }
 
 export async function DELETE(req: Request, { params }: RouteContext) {
@@ -141,7 +142,7 @@ export async function DELETE(req: Request, { params }: RouteContext) {
   const project = await fetchProjectForOrg(params.id, org.id)
 
   if (!project) {
-    return Response.json({ error: 'Project not found' }, { status: 404 })
+    return notFound('Project not found')
   }
 
   const { error } = await supabase
@@ -151,8 +152,8 @@ export async function DELETE(req: Request, { params }: RouteContext) {
     .eq('org_id', org.id)
 
   if (error) {
-    return Response.json({ error: 'Failed to delete project' }, { status: 500 })
+    return serverError('Failed to delete project')
   }
 
-  return Response.json({ deleted: true, id: params.id })
+  return ok({ deleted: true, id: params.id })
 }

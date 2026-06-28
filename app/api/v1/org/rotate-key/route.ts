@@ -1,3 +1,4 @@
+import { ok, serverError } from '../../../../../lib/api-response'
 import { randomBytes } from 'crypto'
 import { requireAuth } from '../../../../../lib/auth'
 import { supabase } from '../../../../../lib/supabase'
@@ -12,10 +13,10 @@ export async function POST(req: Request) {
     .eq('id', org.id)
 
   if (error) {
-    return Response.json({ error: 'Failed to rotate API key' }, { status: 500 })
+    return serverError('Failed to rotate API key')
   }
 
-  return Response.json({
+  return ok({
     api_key: apiKey,
     warning: 'Save this key now. It will not be shown again.'
   })

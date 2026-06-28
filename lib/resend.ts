@@ -1,3 +1,4 @@
+import { env } from './env'
 export type DriftAlertInput = {
   orgName: string
   recipientEmail: string
@@ -70,7 +71,7 @@ function buildEmailHtml(input: DriftAlertInput): string {
 
 export async function sendDriftAlert(input: DriftAlertInput): Promise<void> {
   try {
-    const apiKey = process.env.RESEND_API_KEY
+    const apiKey = env.RESEND_API_KEY
     if (!apiKey) {
       console.warn('RESEND_API_KEY is not set; skipping drift alert email')
       return

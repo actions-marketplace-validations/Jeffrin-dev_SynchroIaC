@@ -1,3 +1,4 @@
+import { ok, badRequest, notFound, serverError } from '../../../../../lib/api-response'
 import { requireAuth } from '../../../../../lib/auth'
 import { supabase } from '../../../../../lib/supabase'
 
@@ -56,10 +57,10 @@ export async function GET(req: Request, { params }: RouteContext) {
   const drift = await fetchDriftForOrg(params.id, org.id)
 
   if (!drift) {
-    return Response.json({ error: 'Drift not found' }, { status: 404 })
+    return notFound('Drift not found')
   }
 
-  return Response.json(drift)
+  return ok(drift)
 }
 
 export async function PATCH(req: Request, { params }: RouteContext) {
@@ -69,20 +70,20 @@ export async function PATCH(req: Request, { params }: RouteContext) {
   try {
     const parsed = await req.json()
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      return Response.json({ error: 'body is missing or invalid' }, { status: 400 })
+      return badRequest('body is missing or invalid')
     }
     body = parsed as { resolved?: unknown }
   } catch {
-    return Response.json({ error: 'Invalid JSON body' }, { status: 400 })
+    return badRequest('Invalid JSON body')
   }
 
   if (typeof body.resolved !== 'boolean') {
-    return Response.json({ error: 'resolved must be a boolean' }, { status: 400 })
+    return badRequest('resolved must be a boolean')
   }
 
   const drift = await fetchDriftForOrg(params.id, org.id)
   if (!drift) {
-    return Response.json({ error: 'Drift not found' }, { status: 404 })
+    return notFound('Drift not found')
   }
 
   const { error: updateError } = await supabase
@@ -92,13 +93,13 @@ export async function PATCH(req: Request, { params }: RouteContext) {
     .eq('scan_id', drift.scan_id)
 
   if (updateError) {
-    return Response.json({ error: 'Failed to update drift' }, { status: 500 })
+    return serverError('Failed to update drift')
   }
 
   const updatedDrift = await fetchDriftForOrg(params.id, org.id)
   if (!updatedDrift) {
-    return Response.json({ error: 'Drift not found' }, { status: 404 })
+    return notFound('Drift not found')
   }
 
-  return Response.json(updatedDrift)
+  return ok(updatedDrift)
 }

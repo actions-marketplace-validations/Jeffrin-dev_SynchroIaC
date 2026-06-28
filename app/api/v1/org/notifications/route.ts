@@ -1,3 +1,4 @@
+import { ok, created, badRequest, serverError } from '../../../../../lib/api-response'
 import { requireAuth } from '../../../../../lib/auth'
 import { supabase } from '../../../../../lib/supabase'
 
@@ -42,29 +43,29 @@ export async function GET(req: Request) {
     .eq('org_id', org.id)
     .order('created_at', { ascending: false })
 
-  if (error) return Response.json({ error: 'Failed to fetch notification configs' }, { status: 500 })
-  return Response.json({ notification_configs: data ?? [] })
+  if (error) return serverError('Failed to fetch notification configs')
+  return ok({ notification_configs: data ?? [] })
 }
 
 export async function POST(req: Request) {
   const org = await requireAuth(req)
   const { body, error: bodyError } = await parseJsonBody(req)
-  if (bodyError || !body) return Response.json({ error: bodyError }, { status: 400 })
+  if (bodyError || !body) return badRequest(bodyError ?? 'Invalid request body')
 
   if (typeof body.type !== 'string' || !TYPES.has(body.type)) {
-    return Response.json({ error: 'type must be email or slack' }, { status: 400 })
+    return badRequest('type must be email or slack')
   }
 
   const configError = validateConfig(body.type, body.config)
-  if (configError) return Response.json({ error: configError }, { status: 400 })
+  if (configError) return badRequest(configError)
 
   const { count, error: countError } = await supabase
     .from('notification_configs')
     .select('id', { count: 'exact', head: true })
     .eq('org_id', org.id)
 
-  if (countError) return Response.json({ error: 'Failed to enforce notification config limit' }, { status: 500 })
-  if ((count ?? 0) >= MAX_CONFIGS) return Response.json({ error: 'Maximum 5 notification configs per org' }, { status: 400 })
+  if (countError) return serverError('Failed to enforce notification config limit')
+  if ((count ?? 0) >= MAX_CONFIGS) return badRequest('Maximum 5 notification configs per org')
 
   const { data, error } = await supabase
     .from('notification_configs')
@@ -72,6 +73,6 @@ export async function POST(req: Request) {
     .select('*')
     .single()
 
-  if (error || !data) return Response.json({ error: 'Failed to create notification config' }, { status: 500 })
-  return Response.json(data, { status: 201 })
+  if (error || !data) return serverError('Failed to create notification config')
+  return created(data)
 }

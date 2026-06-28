@@ -1,3 +1,4 @@
+import { ok, serverError } from '../../../lib/api-response'
 import { supabase } from '../../../lib/supabase'
 
 export async function GET() {
@@ -7,8 +8,8 @@ export async function GET() {
     .limit(1)
 
   if (error) {
-    return Response.json({ ok: false, error: error.message }, { status: 500 })
+    return serverError(error.message)
   }
 
-  return Response.json({ ok: true, timestamp: new Date().toISOString() })
+  return ok({ ok: true, timestamp: new Date().toISOString() })
 }

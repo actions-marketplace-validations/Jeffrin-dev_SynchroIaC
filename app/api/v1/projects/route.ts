@@ -1,3 +1,4 @@
+import { ok, created, badRequest, paymentRequired, serverError } from '../../../../lib/api-response'
 import { requireAuth } from '../../../../lib/auth'
 import { supabase } from '../../../../lib/supabase'
 
@@ -113,7 +114,7 @@ export async function GET(req: Request) {
     .order('created_at', { ascending: false })
 
   if (error) {
-    return Response.json({ error: 'Failed to fetch projects' }, { status: 500 })
+    return serverError('Failed to fetch projects')
   }
 
   try {
@@ -125,9 +126,9 @@ export async function GET(req: Request) {
       latest_scan_total_drifts: stats.get(project.id as string)?.latest_scan_total_drifts ?? null
     }))
 
-    return Response.json({ projects: projectsWithStats, total: count ?? projectsWithStats.length })
+    return ok({ projects: projectsWithStats, total: count ?? projectsWithStats.length })
   } catch {
-    return Response.json({ error: 'Failed to fetch project scan stats' }, { status: 500 })
+    return serverError('Failed to fetch project scan stats')
   }
 }
 
@@ -136,14 +137,14 @@ export async function POST(req: Request) {
   const { body, error: bodyError } = await parseJsonBody(req)
 
   if (bodyError || !body) {
-    return Response.json({ error: bodyError }, { status: 400 })
+    return badRequest(bodyError ?? 'Invalid request body')
   }
 
   const nameError = validateName(body.name, true)
-  if (nameError) return Response.json({ error: nameError }, { status: 400 })
+  if (nameError) return badRequest(nameError)
 
   const fieldsError = validateOptionalProjectFields(body)
-  if (fieldsError) return Response.json({ error: fieldsError }, { status: 400 })
+  if (fieldsError) return badRequest(fieldsError)
 
   if (org.plan === 'free' || org.plan === 'pro') {
     const planLimit = org.plan === 'free' ? 2 : 10
@@ -153,12 +154,12 @@ export async function POST(req: Request) {
       .eq('org_id', org.id)
 
     if (countError) {
-      return Response.json({ error: 'Failed to enforce project limit' }, { status: 500 })
+      return serverError('Failed to enforce project limit')
     }
 
     if ((count ?? 0) >= planLimit) {
       const message = org.plan === 'free' ? 'Free plan limited to 2 projects' : 'Pro plan limited to 10 projects'
-      return Response.json({ error: message, upgrade_url: '/dashboard/billing' }, { status: 402 })
+      return paymentRequired(message, '/dashboard/billing')
     }
   }
 
@@ -177,8 +178,8 @@ export async function POST(req: Request) {
     .single()
 
   if (error) {
-    return Response.json({ error: 'Failed to create project' }, { status: 500 })
+    return serverError('Failed to create project')
   }
 
-  return Response.json(data, { status: 201 })
+  return created(data)
 }

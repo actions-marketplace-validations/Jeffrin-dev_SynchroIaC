@@ -1,5 +1,7 @@
+import { badGateway, created, notFound, ok, paymentRequired, tooManyRequests } from '../../../../../../lib/api-response'
 import { requireAuth } from '../../../../../../lib/auth'
 import { createDriftFixPR, type CreatePRInput } from '../../../../../../lib/github'
+import { checkRateLimit } from '../../../../../../lib/ratelimit'
 import { supabase } from '../../../../../../lib/supabase'
 
 const DRIFT_SELECT = `
@@ -86,35 +88,28 @@ function buildCreatePRInput(drift: DriftRecord): CreatePRInput {
 
 export async function POST(req: Request, { params }: RouteContext) {
   const org = await requireAuth(req)
+  const rateLimit = checkRateLimit(`pr:${org.id}`, 10, 60_000)
+  if (!rateLimit.allowed) {
+    return tooManyRequests(rateLimit.resetAt - Date.now())
+  }
+
   const drift = await fetchDriftForOrg(params.id, org.id)
 
   if (!drift) {
-    return Response.json({ error: 'Drift not found' }, { status: 404 })
+    return notFound('Drift not found')
   }
 
   if (!drift.repo_url?.trim()) {
-    return Response.json(
-      {
-        error: 'No repository URL configured for this project',
-        detail: 'Set repo_url on the project before generating fix PRs'
-      },
-      { status: 422 }
-    )
+    return badGateway('No repository URL configured for this project', 'Set repo_url on the project before generating fix PRs')
   }
 
   const existingPrUrl = drift.pr_url?.trim()
   if (existingPrUrl) {
-    return Response.json({ pr_url: existingPrUrl, cached: true })
+    return ok({ pr_url: existingPrUrl, cached: true })
   }
 
   if (org.plan === 'free') {
-    return Response.json(
-      {
-        error: 'PR generation requires a pro or team plan',
-        upgrade_url: '/dashboard/billing'
-      },
-      { status: 402 }
-    )
+    return paymentRequired('PR generation requires a pro or team plan', '/dashboard/billing')
   }
 
   let prUrl: string
@@ -122,7 +117,7 @@ export async function POST(req: Request, { params }: RouteContext) {
     prUrl = await createDriftFixPR(buildCreatePRInput(drift))
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
-    return Response.json({ error: 'Failed to create GitHub PR', detail: message }, { status: 502 })
+    return badGateway('Failed to create GitHub PR', message)
   }
 
   const { error: updateError } = await supabase.from('drifts').update({ pr_url: prUrl }).eq('id', drift.id)
@@ -130,5 +125,5 @@ export async function POST(req: Request, { params }: RouteContext) {
     console.error('Failed to store drift PR URL', updateError)
   }
 
-  return Response.json({ pr_url: prUrl, cached: false }, { status: 201 })
+  return created({ pr_url: prUrl, cached: false })
 }

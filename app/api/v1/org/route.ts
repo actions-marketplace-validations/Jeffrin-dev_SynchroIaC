@@ -1,3 +1,4 @@
+import { badRequest, ok, serverError } from '../../../../lib/api-response'
 import { requireAuth } from '../../../../lib/auth'
 import { supabase } from '../../../../lib/supabase'
 
@@ -30,7 +31,7 @@ export async function GET(req: Request) {
     .single()
 
   if (orgError || !organization) {
-    return Response.json({ error: 'Failed to fetch organization' }, { status: 500 })
+    return serverError('Failed to fetch organization')
   }
 
   const { data: notificationConfigs, error: configsError } = await supabase
@@ -40,12 +41,12 @@ export async function GET(req: Request) {
     .order('created_at', { ascending: false })
 
   if (configsError) {
-    return Response.json({ error: 'Failed to fetch notification configs' }, { status: 500 })
+    return serverError('Failed to fetch notification configs')
   }
 
   const { api_key: apiKey, paddle_subscription_id: _subscriptionId, ...safeOrg } = organization as Record<string, any>
 
-  return Response.json({
+  return ok({
     org: safeOrg,
     notification_configs: notificationConfigs ?? [],
     api_key_preview: previewApiKey(apiKey as string)
@@ -57,15 +58,15 @@ export async function PATCH(req: Request) {
   const { body, error: bodyError } = await parseJsonBody(req)
 
   if (bodyError || !body) {
-    return Response.json({ error: bodyError }, { status: 400 })
+    return badRequest(bodyError ?? 'Invalid request body')
   }
 
   if (typeof body.name !== 'string' || body.name.trim().length === 0) {
-    return Response.json({ error: 'name must be a non-empty string' }, { status: 400 })
+    return badRequest('name must be a non-empty string')
   }
 
   if (body.name.length > 100) {
-    return Response.json({ error: 'name must be 100 characters or fewer' }, { status: 400 })
+    return badRequest('name must be 100 characters or fewer')
   }
 
   const { data, error } = await supabase
@@ -76,8 +77,8 @@ export async function PATCH(req: Request) {
     .single()
 
   if (error || !data) {
-    return Response.json({ error: 'Failed to update organization' }, { status: 500 })
+    return serverError('Failed to update organization')
   }
 
-  return Response.json({ org: data })
+  return ok({ org: data })
 }
