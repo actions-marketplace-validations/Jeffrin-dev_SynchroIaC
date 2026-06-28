@@ -61,7 +61,7 @@ export async function POST(req: Request) {
 
   const { data: project, error: projectError } = await supabase
     .from('projects')
-    .select('id')
+    .select('id, name')
     .eq('id', body.project_id)
     .eq('org_id', org.id)
     .maybeSingle()
@@ -154,7 +154,33 @@ export async function POST(req: Request) {
         await Promise.all(
           (configs ?? [])
             .filter((config) => config.type === 'email')
-            .map((config) => sendDriftAlert({ org, project_id: body.project_id, scan_id: scanId, summary, config }))
+            .map((config) => {
+              const configBody = config.config as Record<string, unknown>
+              const recipientEmail =
+                typeof configBody.recipientEmail === 'string'
+                  ? configBody.recipientEmail
+                  : typeof configBody.email === 'string'
+                    ? configBody.email
+                    : ''
+
+              if (!recipientEmail) {
+                console.warn('Email notification config missing recipient email', config.id)
+                return Promise.resolve()
+              }
+
+              return sendDriftAlert({
+                orgName: org.name,
+                recipientEmail,
+                projectName: project.name,
+                scanId,
+                totalDrifts: summary.total,
+                criticalCount: summary.critical,
+                highCount: summary.high,
+                mediumCount: summary.medium,
+                lowCount: summary.low,
+                dashboardUrl: `${process.env.NEXT_PUBLIC_APP_URL ?? ''}/dashboard/scans/${scanId}`
+              })
+            })
         )
       } catch (error) {
         console.error('Failed to send drift alerts', error)
