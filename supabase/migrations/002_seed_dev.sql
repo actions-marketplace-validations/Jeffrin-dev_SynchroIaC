@@ -1,7 +1,7 @@
 -- Development seed data for local SynchroIaC environments.
 
 insert into organizations (name, api_key, plan)
-values ('Dev Org', 'test-api-key-dev', 'pro')
+values ('Dev Org', 'sia_devkey00000000000000000000000000', 'pro')
 on conflict (api_key) do update
 set
   name = excluded.name,
@@ -15,7 +15,7 @@ select
   './terraform',
   'us-east-1'
 from organizations
-where api_key = 'test-api-key-dev'
+where api_key = 'sia_devkey00000000000000000000000000'
 and not exists (
   select 1
   from projects
