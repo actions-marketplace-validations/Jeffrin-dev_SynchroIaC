@@ -1,5 +1,7 @@
+import { badGateway, notFound, ok, paymentRequired, tooManyRequests } from '../../../../../../lib/api-response'
 import { requireAuth } from '../../../../../../lib/auth'
 import { explainDrift, type DriftExplainInput } from '../../../../../../lib/openrouter'
+import { checkRateLimit } from '../../../../../../lib/ratelimit'
 import { supabase } from '../../../../../../lib/supabase'
 
 const FREE_PLAN_MONTHLY_EXPLANATION_LIMIT = 10
@@ -98,28 +100,26 @@ async function countMonthlyExplanations(orgId: string): Promise<number> {
 
 export async function POST(req: Request, { params }: RouteContext) {
   const org = await requireAuth(req)
+  const rateLimit = checkRateLimit(`explain:${org.id}`, 20, 60_000)
+  if (!rateLimit.allowed) {
+    return tooManyRequests(rateLimit.resetAt - Date.now())
+  }
+
   const drift = await fetchDriftForOrg(params.id, org.id)
 
   if (!drift) {
-    return Response.json({ error: 'Drift not found' }, { status: 404 })
+    return notFound('Drift not found')
   }
 
   const cachedExplanation = drift.explanation?.trim()
   if (cachedExplanation) {
-    return Response.json({ explanation: cachedExplanation, cached: true })
+    return ok({ explanation: cachedExplanation, cached: true })
   }
 
   if (org.plan === 'free') {
     const monthlyExplanationCount = await countMonthlyExplanations(org.id)
     if (monthlyExplanationCount >= FREE_PLAN_MONTHLY_EXPLANATION_LIMIT) {
-      return Response.json(
-        {
-          error: 'Monthly AI explanation limit reached on free plan',
-          limit: FREE_PLAN_MONTHLY_EXPLANATION_LIMIT,
-          upgrade_url: '/dashboard/billing'
-        },
-        { status: 402 }
-      )
+      return paymentRequired('Monthly AI explanation limit reached on free plan', '/dashboard/billing')
     }
   }
 
@@ -128,7 +128,7 @@ export async function POST(req: Request, { params }: RouteContext) {
     explanation = await explainDrift(buildExplainInput(drift))
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
-    return Response.json({ error: 'AI explanation failed', detail: message }, { status: 502 })
+    return badGateway('AI explanation failed', message)
   }
 
   const { error: updateError } = await supabase.from('drifts').update({ explanation }).eq('id', drift.id)
@@ -136,5 +136,5 @@ export async function POST(req: Request, { params }: RouteContext) {
     console.error('Failed to store drift explanation', updateError)
   }
 
-  return Response.json({ explanation, cached: false })
+  return ok({ explanation, cached: false })
 }

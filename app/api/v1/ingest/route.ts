@@ -1,4 +1,6 @@
+import { badRequest, created, notFound, serverError, tooManyRequests } from '../../../../lib/api-response'
 import { requireAuth } from '../../../../lib/auth'
+import { checkRateLimit } from '../../../../lib/ratelimit'
 import { sendDriftAlert } from '../../../../lib/resend'
 import { supabase } from '../../../../lib/supabase'
 
@@ -34,29 +36,33 @@ function validateSummary(summary: unknown): SummaryPayload | string {
 
 export async function POST(req: Request) {
   const org = await requireAuth(req)
+  const rateLimit = checkRateLimit(`ingest:${org.id}`, 60, 60_000)
+  if (!rateLimit.allowed) {
+    return tooManyRequests(rateLimit.resetAt - Date.now())
+  }
 
   let body: IngestPayload
   try {
     const parsed = await req.json()
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      return Response.json({ error: 'body is missing or invalid' }, { status: 400 })
+      return badRequest('body is missing or invalid')
     }
     body = parsed as IngestPayload
   } catch {
-    return Response.json({ error: 'Invalid JSON body' }, { status: 400 })
+    return badRequest('Invalid JSON body')
   }
 
   if (typeof body.project_id !== 'string' || body.project_id.trim() === '') {
-    return Response.json({ error: 'project_id is missing or invalid' }, { status: 400 })
+    return badRequest('project_id is missing or invalid')
   }
 
   if (!Array.isArray(body.drifts)) {
-    return Response.json({ error: 'drifts is missing or invalid' }, { status: 400 })
+    return badRequest('drifts is missing or invalid')
   }
 
   const summary = validateSummary(body.summary)
   if (typeof summary === 'string') {
-    return Response.json({ error: summary }, { status: 400 })
+    return badRequest(summary)
   }
 
   const { data: project, error: projectError } = await supabase
@@ -67,7 +73,7 @@ export async function POST(req: Request) {
     .maybeSingle()
 
   if (projectError || !project) {
-    return Response.json({ error: 'Project not found' }, { status: 404 })
+    return notFound('Project not found')
   }
 
   const { data: scan, error: scanError } = await supabase
@@ -82,7 +88,7 @@ export async function POST(req: Request) {
     .single()
 
   if (scanError || !scan) {
-    return Response.json({ error: 'Failed to create scan' }, { status: 500 })
+    return serverError('Failed to create scan')
   }
 
   const scanId = scan.id
@@ -116,7 +122,7 @@ export async function POST(req: Request) {
         })
         .eq('id', scanId)
 
-      return Response.json({ error: 'Failed to insert drift records' }, { status: 500 })
+      return serverError('Failed to insert drift records')
     }
   }
 
@@ -188,12 +194,9 @@ export async function POST(req: Request) {
     })()
   }
 
-  return Response.json(
-    {
-      scan_id: scanId,
-      drifts_recorded: body.drifts.length,
-      status: 'completed'
-    },
-    { status: 201 }
-  )
+  return created({
+    scan_id: scanId,
+    drifts_recorded: body.drifts.length,
+    status: 'completed'
+  })
 }

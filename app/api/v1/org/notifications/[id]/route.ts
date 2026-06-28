@@ -1,3 +1,4 @@
+import { ok, badRequest, notFound, serverError } from '../../../../../../lib/api-response'
 import { requireAuth } from '../../../../../../lib/auth'
 import { supabase } from '../../../../../../lib/supabase'
 
@@ -29,11 +30,11 @@ async function parseJsonBody(req: Request) {
 export async function PATCH(req: Request, { params }: Params) {
   const org = await requireAuth(req)
   const existing = await fetchConfig(params.id, org.id)
-  if (!existing) return Response.json({ error: 'Notification config not found' }, { status: 404 })
+  if (!existing) return notFound('Notification config not found')
 
   const { body, error: bodyError } = await parseJsonBody(req)
-  if (bodyError || !body) return Response.json({ error: bodyError }, { status: 400 })
-  if (typeof body.enabled !== 'boolean') return Response.json({ error: 'enabled must be a boolean' }, { status: 400 })
+  if (bodyError || !body) return badRequest(bodyError ?? 'Invalid request body')
+  if (typeof body.enabled !== 'boolean') return badRequest('enabled must be a boolean')
 
   const { data, error } = await supabase
     .from('notification_configs')
@@ -43,14 +44,14 @@ export async function PATCH(req: Request, { params }: Params) {
     .select('*')
     .single()
 
-  if (error || !data) return Response.json({ error: 'Failed to update notification config' }, { status: 500 })
-  return Response.json(data)
+  if (error || !data) return serverError('Failed to update notification config')
+  return ok(data)
 }
 
 export async function DELETE(req: Request, { params }: Params) {
   const org = await requireAuth(req)
   const existing = await fetchConfig(params.id, org.id)
-  if (!existing) return Response.json({ error: 'Notification config not found' }, { status: 404 })
+  if (!existing) return notFound('Notification config not found')
 
   const { error } = await supabase
     .from('notification_configs')
@@ -58,6 +59,6 @@ export async function DELETE(req: Request, { params }: Params) {
     .eq('id', params.id)
     .eq('org_id', org.id)
 
-  if (error) return Response.json({ error: 'Failed to delete notification config' }, { status: 500 })
-  return Response.json({ deleted: true })
+  if (error) return serverError('Failed to delete notification config')
+  return ok({ deleted: true })
 }

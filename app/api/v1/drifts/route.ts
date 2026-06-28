@@ -1,3 +1,4 @@
+import { ok, badRequest, serverError } from '../../../../lib/api-response'
 import { requireAuth } from '../../../../lib/auth'
 import { supabase } from '../../../../lib/supabase'
 
@@ -82,27 +83,27 @@ export async function GET(req: Request) {
 
   const limit = parseIntegerParam(params.get('limit'), 50, (value) => value >= 1 && value <= 100)
   if (limit === null) {
-    return Response.json({ error: 'limit must be an integer between 1 and 100' }, { status: 400 })
+    return badRequest('limit must be an integer between 1 and 100')
   }
 
   const offset = parseIntegerParam(params.get('offset'), 0, (value) => value >= 0)
   if (offset === null) {
-    return Response.json({ error: 'offset must be an integer greater than or equal to 0' }, { status: 400 })
+    return badRequest('offset must be an integer greater than or equal to 0')
   }
 
   const riskLevel = params.get('risk_level')
   if (riskLevel && !RISK_LEVELS.has(riskLevel)) {
-    return Response.json({ error: 'risk_level must be one of low, medium, high, critical' }, { status: 400 })
+    return badRequest('risk_level must be one of low, medium, high, critical')
   }
 
   const driftType = params.get('drift_type')
   if (driftType && !DRIFT_TYPES.has(driftType)) {
-    return Response.json({ error: 'drift_type must be one of configuration, missing, extra, security' }, { status: 400 })
+    return badRequest('drift_type must be one of configuration, missing, extra, security')
   }
 
   const resolved = params.get('resolved')
   if (resolved !== null && resolved !== 'true' && resolved !== 'false') {
-    return Response.json({ error: 'resolved must be true or false' }, { status: 400 })
+    return badRequest('resolved must be true or false')
   }
 
   const { data: drifts, error } = await applyFilters(buildDriftsQuery(), org.id, params)
@@ -110,14 +111,14 @@ export async function GET(req: Request) {
     .range(offset, offset + limit - 1)
 
   if (error) {
-    return Response.json({ error: 'Failed to fetch drifts' }, { status: 500 })
+    return serverError('Failed to fetch drifts')
   }
 
   const { count, error: countError } = await applyFilters(buildDriftsQuery(true), org.id, params)
 
   if (countError) {
-    return Response.json({ error: 'Failed to count drifts' }, { status: 500 })
+    return serverError('Failed to count drifts')
   }
 
-  return Response.json({ drifts: (drifts ?? []).map((drift) => flattenDrift(drift)), total: count ?? 0, limit, offset })
+  return ok({ drifts: (drifts ?? []).map((drift) => flattenDrift(drift)), total: count ?? 0, limit, offset })
 }

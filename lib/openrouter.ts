@@ -1,3 +1,4 @@
+import { env } from './env'
 export type DriftExplainInput = {
   resourceType: string
   resourceId: string
@@ -48,7 +49,7 @@ function extractErrorMessage(body: unknown): string {
 }
 
 export async function explainDrift(input: DriftExplainInput): Promise<string> {
-  const apiKey = process.env.OPENROUTER_API_KEY
+  const apiKey = env.OPENROUTER_API_KEY
   if (!apiKey) {
     throw new Error('Missing OPENROUTER_API_KEY')
   }

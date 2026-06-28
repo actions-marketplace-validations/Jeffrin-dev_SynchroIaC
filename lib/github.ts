@@ -1,3 +1,4 @@
+import { env } from './env'
 export type CreatePRInput = {
   repoUrl: string
   driftId: string
@@ -144,7 +145,7 @@ terraform apply -target=${input.resourceType}.${input.resourceId}
 
 export async function createDriftFixPR(input: CreatePRInput): Promise<string> {
   const { owner, repo } = parseGitHubRepo(input.repoUrl)
-  const token = process.env.GITHUB_TOKEN
+  const token = env.GITHUB_TOKEN
   if (!token) {
     throw new Error('Missing GITHUB_TOKEN')
   }

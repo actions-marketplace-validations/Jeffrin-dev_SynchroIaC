@@ -1,3 +1,4 @@
+import { env } from './env'
 import * as crypto from 'crypto'
 
 function parsePaddleSignature(header: string): { ts: string; h1: string } {
@@ -19,7 +20,7 @@ export async function verifyPaddleWebhook(req: Request): Promise<any> {
     throw new Error('Missing paddle-signature header')
   }
 
-  const secret = process.env.PADDLE_WEBHOOK_SECRET
+  const secret = env.PADDLE_WEBHOOK_SECRET
   if (!secret) {
     throw new Error('Missing PADDLE_WEBHOOK_SECRET')
   }
@@ -50,11 +51,11 @@ export function extractPaddleSubscriptionData(event: any): {
   const priceId = data.items?.[0]?.price?.id ?? ''
   let plan = 'free'
 
-  if (process.env.PADDLE_PRICE_ID_PRO === priceId) {
+  if (env.PADDLE_PRICE_ID_PRO === priceId) {
     plan = 'pro'
   }
 
-  if (process.env.PADDLE_PRICE_ID_TEAM === priceId) {
+  if (env.PADDLE_PRICE_ID_TEAM === priceId) {
     plan = 'team'
   }
 

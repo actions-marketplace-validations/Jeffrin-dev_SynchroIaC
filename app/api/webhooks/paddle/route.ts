@@ -1,3 +1,4 @@
+import { ok, badRequest } from '../../../../lib/api-response'
 import { extractPaddleSubscriptionData, verifyPaddleWebhook } from '../../../../lib/paddle'
 import { supabase } from '../../../../lib/supabase'
 
@@ -45,12 +46,12 @@ export async function POST(req: Request) {
     event = await verifyPaddleWebhook(req)
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Invalid Paddle webhook'
-    return Response.json({ error: message }, { status: 400 })
+    return badRequest(message)
   }
 
   const eventType = event.event_type
   if (!HANDLED_EVENT_TYPES.has(eventType)) {
-    return Response.json({ received: true })
+    return ok({ received: true })
   }
 
   const subscription = extractPaddleSubscriptionData(event)
@@ -62,7 +63,7 @@ export async function POST(req: Request) {
       subscriptionId: subscription.subscriptionId,
       customOrgId: event.data?.custom_data?.org_id
     })
-    return Response.json({ received: true })
+    return ok({ received: true })
   }
 
   if (eventType === 'subscription.canceled') {
@@ -78,7 +79,7 @@ export async function POST(req: Request) {
       console.error('Failed to clear canceled Paddle subscription', error)
     }
 
-    return Response.json({ received: true })
+    return ok({ received: true })
   }
 
   const { error } = await supabase
@@ -93,5 +94,5 @@ export async function POST(req: Request) {
     console.error('Failed to update Paddle subscription', error)
   }
 
-  return Response.json({ received: true })
+  return ok({ received: true })
 }
