@@ -1,3 +1,97 @@
+import { extractPaddleSubscriptionData, verifyPaddleWebhook } from '../../../../lib/paddle'
+import { supabase } from '../../../../lib/supabase'
+
+const HANDLED_EVENT_TYPES = new Set([
+  'subscription.activated',
+  'subscription.updated',
+  'subscription.canceled'
+])
+
+async function findOrganizationId(subscriptionId: string, customOrgId?: unknown): Promise<string | null> {
+  if (typeof customOrgId === 'string' && customOrgId.trim() !== '') {
+    const { data, error } = await supabase
+      .from('organizations')
+      .select('id')
+      .eq('id', customOrgId)
+      .maybeSingle()
+
+    if (error) {
+      console.error('Failed to find organization by Paddle custom_data.org_id', error)
+    }
+
+    if (data?.id) {
+      return data.id
+    }
+  }
+
+  const { data, error } = await supabase
+    .from('organizations')
+    .select('id')
+    .eq('paddle_subscription_id', subscriptionId)
+    .maybeSingle()
+
+  if (error) {
+    console.error('Failed to find organization by Paddle subscription ID', error)
+    return null
+  }
+
+  return data?.id ?? null
+}
+
 export async function POST(req: Request) {
-  return Response.json({ error: 'Not implemented' }, { status: 501 })
+  let event: any
+
+  try {
+    event = await verifyPaddleWebhook(req)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Invalid Paddle webhook'
+    return Response.json({ error: message }, { status: 400 })
+  }
+
+  const eventType = event.event_type
+  if (!HANDLED_EVENT_TYPES.has(eventType)) {
+    return Response.json({ received: true })
+  }
+
+  const subscription = extractPaddleSubscriptionData(event)
+  const orgId = await findOrganizationId(subscription.subscriptionId, event.data?.custom_data?.org_id)
+
+  if (!orgId) {
+    console.warn('Paddle webhook organization not found', {
+      eventType,
+      subscriptionId: subscription.subscriptionId,
+      customOrgId: event.data?.custom_data?.org_id
+    })
+    return Response.json({ received: true })
+  }
+
+  if (eventType === 'subscription.canceled') {
+    const { error } = await supabase
+      .from('organizations')
+      .update({
+        plan: 'free',
+        paddle_subscription_id: null
+      })
+      .eq('id', orgId)
+
+    if (error) {
+      console.error('Failed to clear canceled Paddle subscription', error)
+    }
+
+    return Response.json({ received: true })
+  }
+
+  const { error } = await supabase
+    .from('organizations')
+    .update({
+      plan: subscription.plan,
+      paddle_subscription_id: subscription.subscriptionId
+    })
+    .eq('id', orgId)
+
+  if (error) {
+    console.error('Failed to update Paddle subscription', error)
+  }
+
+  return Response.json({ received: true })
 }
