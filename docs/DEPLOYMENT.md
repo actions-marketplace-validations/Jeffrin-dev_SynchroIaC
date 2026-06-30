@@ -5,7 +5,7 @@
 - Vercel account (Hobby is fine)
 - Supabase project (free tier)
 - GitHub Personal Access Token (repo scope)
-- OpenRouter account (free tier)
+- Groq (free tier)
 - Resend account (free tier)
 - Paddle account (sandbox to start)
 
@@ -47,7 +47,7 @@
 
 | Variable | Feature |
 |----------|---------|
-| `OPENROUTER_API_KEY` | AI drift explanations |
+| `GROQ_API_KEY` | AI drift explanations |
 | `GITHUB_TOKEN` | Fix PR generation |
 | `RESEND_API_KEY` | Email drift alerts |
 | `PADDLE_WEBHOOK_SECRET` | Billing webhooks |
